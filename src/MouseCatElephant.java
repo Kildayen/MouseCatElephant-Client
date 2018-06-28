@@ -1,53 +1,48 @@
 /**
- * Class MouseCatElephant is the main program for the client side of the MouseCatElephant project.
- * The command line arguments specify the host and port for the server and client, and the name of the player.
+ * Class MouseCatElephant is the main program for the MouseCatElephant project.
+ * The command line arguments specify the host and port for the server, and
+ * the name of the player.
  * 
  * @author Adam Warner
- * @version 8/3/2015
+ * @version 7/18/2015
  */
 
 import java.net.InetSocketAddress;
-import java.net.DatagramSocket;
+import java.net.Socket;
 
 public class MouseCatElephant
 {
-	
+
 	/**
 	 * Main program.
 	 */
 	public static void main(String[] args) throws Exception
 	{
-		if (args.length != 5) usage();
-		String serverHost = args[0];
-		String clientHost = args[2];
-		String name = args[4];
-		int serverPort = 0, clientPort = 0;
+		if (args.length != 3) usage();
+		String host = args[0];
+		String name = args[2];
+		int port = 0;
 		
 		try 
 		{
-			serverPort = Integer.parseInt(args[1]);
-			clientPort = Integer.parseInt(args[3]);
+			port = Integer.parseInt(args[1]);
 		} catch (NumberFormatException e)
 		{
-			System.err.println("Invalid Port.");
-			System.exit(1);
+			e.printStackTrace();
 		}
 		
-		DatagramSocket mailbox = new DatagramSocket(
-			new InetSocketAddress(clientHost, clientPort));
+		Socket socket = new Socket();
+		socket.connect (new InetSocketAddress(host, port));
 		
-		MouseCatElephantClientState model = new MouseCatElephantClientState();
+		MouseCatElephantState model = new MouseCatElephantState();
 		MouseCatElephantUI view = MouseCatElephantUI.create(name);
 
-		final ModelProxy proxy = new ModelProxy(
-			mailbox, new InetSocketAddress(
-				serverHost, serverPort));
-		
+		ModelProxy proxy = new ModelProxy(socket);
 		model.setModelListener(view);
 		view.setViewListener(proxy);
 		proxy.setModelListener(model);
 		
-		proxy.join(null, name);
+		proxy.joinServer(name);
 	}
 
 	/**
@@ -55,7 +50,7 @@ public class MouseCatElephant
 	 */
 	private static void usage()
 	{
-		System.err.println("Usage: $ java MouseCatElephant <serverhost> <serverport> <clienthost> <clientport> <playername>");
+		System.err.println("Usage: $ java MouseCatElephant <host> <port> <playername>");
 		System.exit(1);
 	}
 }

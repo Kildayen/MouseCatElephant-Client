@@ -32,7 +32,7 @@
  * 
  * Modifications:
  * @author	Adam Warner
- * @version 8/28/2015
+ * @version 7/18/2015
  */
 
 import java.awt.event.ActionEvent;
@@ -243,7 +243,7 @@ public class MouseCatElephantUI implements ModelListener
 	 * 
 	 * @param vl		The viewListener object
 	 */
-	public synchronized void setViewListener(ViewListener vl)
+	public void setViewListener(ViewListener vl)
 	{
 		viewListener = vl;
 	}
@@ -494,14 +494,4 @@ public class MouseCatElephantUI implements ModelListener
 			System.exit (1);
 			}
 		}
-
-	/**
-	 * Quit.
-	 */
-	public synchronized void quit() throws IOException {}
-	
-	/**
-	 * Set session id.
-	 */
-	public synchronized void setSession(int id){}
 	}

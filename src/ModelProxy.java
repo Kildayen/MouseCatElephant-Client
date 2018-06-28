@@ -3,129 +3,96 @@
  * The proxy resides in the client program and communicates with the server.
  * 
  * @author	Adam Warner
- * @version 8/2/2015
+ * @version 7/18/2015
  */
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketAddress;
-import java.net.SocketTimeoutException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
+import java.util.StringTokenizer;
 
 public class ModelProxy implements ViewListener
 {
-	private DatagramSocket mailbox;
-	private SocketAddress destination;
-	private ModelListener modelListener;
-	private boolean haveQuit = false;
+	private Socket socket;
+	private OutputStreamWriter out;
+	private BufferedReader in;
+	private ModelListener model;
 
 	/**
-	 * Constructor for the model proxy object.
+	 * Construct a new model proxy.
 	 *
 	 * @param  		socket  		The socket
-	 * 
 	 * @exception 	IOException		Thrown if an I/O error occurred
 	 */
-	 public ModelProxy(DatagramSocket mailbox, SocketAddress destination)
-		throws IOException
+	 public ModelProxy(Socket socket) throws IOException
 	 {
-		this.mailbox = mailbox;
-		this.destination = destination;
+		 this.socket = socket;
+		 out = new OutputStreamWriter(socket.getOutputStream(), "UTF-8");
+		 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 	 }
 
-	// Exported operations
 	/**
 	* Set the model listener object for this model proxy
 	*
 	* @param  modelListener  Model listener.
 	*/
-	public void setModelListener(ModelListener model)
+	public void setModelListener(MouseCatElephantState model)
 	{
-		this.modelListener = model;
+		this.model = model;
 		new ReaderThread().start();
 	}
 
 	/**
 	 * Sends a join message to the server.
 	 * 
-	 * @param	proxy			The proxy
 	 * @param	name			The name of the player joining the server
-	 * 
 	 * @throws	IOException 	Thrown if an I/O error occurred
 	 */
-	public void join(ViewProxy proxy, String name)
-			throws IOException
-	{	
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		DataOutputStream out = new DataOutputStream(baos);
-		out.writeByte('J');
-		out.writeUTF(name);
-		out.close();
-		byte[] payload = baos.toByteArray();
-		mailbox.send(new DatagramPacket(payload, payload.length, destination));
-		}
+	public void joinServer(String name) throws IOException
+	{
+		out.write("join " + name + "\n");
+		out.flush();
+	}
 	
 	/**
 	 * Sends an animal selected message to the server.
 	 * 
-	 * @param	a				The code for the animal selected (0 mouse, 1 cat, 2 elephant)
-	 * 
-	 * @throws	IOException 	Thrown if an I/O error occurred
+	 * @param		a				The code for the animal selected (0 mouse, 1 cat, 2 elephant)
+	 * @exception	IOException 	Thrown if an I/O error occurred
 	 */
 	public void selectAnimal(int a) throws IOException
 	{
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		DataOutputStream out = new DataOutputStream(baos);
-		out.writeByte('C');
-		out.writeByte(a);
-		out.close();
-		byte[] payload = baos.toByteArray();
-		mailbox.send(new DatagramPacket(payload, payload.length, destination));
+		out.write("choose " + a + "\n");
+		out.flush();
 	}
 
 	/**
 	 * Sends a new round selected message to the server.
 	 * 
-	 * @throws	IOException 	Thrown if an I/O error occurred
+	 * @exception	IOException 	Thrown if an I/O error occurred
 	 */
 	public void newRound() throws IOException
 	{
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		DataOutputStream out = new DataOutputStream(baos);
-		out.writeByte('R');
-		out.close();
-		byte[] payload = baos.toByteArray();
-		mailbox.send(new DatagramPacket(payload, payload.length, destination));
+		out.write("new\n");
+		out.flush();
 	}
 	
 	/**
 	 * Sends a quit message to the server and closes the program.
 	 * 
-	 * @param	i					The exit code
-	 * 
+	 * @param	i					The exit code.
 	 * @throws 	IOException			Thrown if an I/O error occurred
 	 */
 	public void quit(int i) throws IOException
 	{
-		if (!haveQuit)
-		{
-			haveQuit = true;
-			if (i != 0)
-			{
-				System.err.println("Invalid Message");
-			}
-
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			DataOutputStream out = new DataOutputStream(baos);
-			out.writeByte('Q');
-			out.close();
-			byte[] payload = baos.toByteArray();
-			mailbox.send(new DatagramPacket(payload, payload.length, destination));
-		}
+		if (i != 0)
+			System.err.println ("Invalid Message");
+		
+		out.write("quit\n");
+		out.flush();
+		socket.close();
 		System.exit(i);
 	}
 	
@@ -136,72 +103,72 @@ public class ModelProxy implements ViewListener
 	{
 		public void run()
 		{
-			byte[] payload = new byte[128];
 			try
 			{
-				mailbox.setSoTimeout(5000);		// set deadline for server response
-				while(true)
-				{	
-					DatagramPacket packet = new DatagramPacket(
-							payload, payload.length);
-					mailbox.receive(packet);
-					DataInputStream in = new DataInputStream(
-						new ByteArrayInputStream(
-							payload, 0, packet.getLength()));
-					
-					byte b = in.readByte();
+				for (;;)
+				{
 					int [] msg = new int[3];
 					String name;
 					
-					switch (b)
+					String str = in.readLine();
+					StringTokenizer tokens = new StringTokenizer(str);
+					
+					if (tokens.countTokens() < 1 || tokens.countTokens() > 4)
 					{
-						case 'I':	//ID
-							msg[0] = in.readByte();	
-							modelListener.setPlayerInfo(msg[0], null);
-							mailbox.setSoTimeout(0);	// remove deadline for server response
+						quit(1);
+					}
+					
+					switch (tokens.nextToken())
+					{
+						case "id":
+							msg[0] = Integer.parseInt(tokens.nextToken());	
+							model.setPlayerInfo(msg[0], null);
 							break;
-						case 'N':	//name
-							name = in.readUTF();
-							msg[0] = in.readByte();
-							modelListener.setPlayerInfo(msg[0], name);
+						case "name":
+							msg[0] = Integer.parseInt(tokens.nextToken());
+							name = tokens.nextToken();
+							model.setPlayerInfo(msg[0], name);
 							break;
-						case 'S':	//score
-							msg[0] = in.readByte();
-							msg[1] = in.readByte();
-							modelListener.reportScore(msg[0], msg[1]);
+						case "score":
+							msg[0] = Integer.parseInt(tokens.nextToken());
+							msg[1] = Integer.parseInt(tokens.nextToken());
+							model.reportScore(msg[0], msg[1]);
 							break;
-						case 'C':	//choice
-							msg[0] = in.readByte();
-							msg[1] = in.readByte();
-							modelListener.animalSelected(msg[0], msg[1]);
+						case "choice":
+							msg[0] = Integer.parseInt(tokens.nextToken());
+							msg[1] = Integer.parseInt(tokens.nextToken());
+							model.animalSelected(msg[0], msg[1]);
 							break;
-						case 'O': 	//outcome
-							msg[0] = in.readByte();
-							msg[1] = in.readByte();
-							msg[2] = in.readByte();
-							modelListener.reportOutcome(msg[0], msg[1], msg[2]);
+						case "outcome": 
+							msg[0] = Integer.parseInt(tokens.nextToken());
+							msg[1] = Integer.parseInt(tokens.nextToken());
+							msg[2] = Integer.parseInt(tokens.nextToken());
+							model.reportOutcome(msg[0], msg[1], msg[2]);
 							break;
-						case 'R':	//new round
-							modelListener.newRoundSelected();
+						case "new":
+							model.newRoundSelected();
 							break;
-						case 'Q':	//quit
+						case "quit":
 							quit(0);
 							break;
-						default:	//quit with errors
+						default:
 							quit(1);
 							break;
 					}
 				}
 			}
-			catch (SocketTimeoutException e)
+			catch (NumberFormatException e)
 			{
-				System.err.println("Timeout on connecting to server.");
-				System.exit(1);
+				e.printStackTrace();
 			}
 			catch (IOException e){}
 			finally
 			{
-				mailbox.close();
+				try
+				{
+					socket.close();
+				}
+				catch (IOException e){}
 			}
 		}
 	}
